@@ -3,21 +3,19 @@ import { Plus, Trash2 } from "lucide-react";
 import DataTable, { type Column } from "@/components/DataTable";
 import Modal from "@/components/Modal";
 import Field from "@/components/Field";
-import Select from "@/components/Select";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { useDetails, useCreateDetail, useUpdateDetail, useDeleteDetail, useFunctionalFields } from "@/hooks/use-lookups";
+import { useFunctionalFields, useCreateFunctionalField, useUpdateFunctionalField, useDeleteFunctionalField } from "@/hooks/use-lookups";
 import { useAuthStore } from "@/stores/auth";
-import type { DetailGetDTO, DetailPostDTO, DetailPutDTO } from "@/types";
+import type { FunctionalFieldGetDTO, FunctionalFieldPostDTO, FunctionalFieldPutDTO } from "@/types";
 
-const empty = { name: "", code: "", functionalFieldId: 0 };
+const empty = { name: "", code: "", serialNumber: 0 };
 
-export default function Details() {
+export default function FunctionalFields() {
   const { isAdmin } = useAuthStore();
-  const { data = [], isLoading } = useDetails();
-  const { data: fields = [] } = useFunctionalFields();
-  const create = useCreateDetail();
-  const update = useUpdateDetail();
-  const remove = useDeleteDetail();
+  const { data = [], isLoading } = useFunctionalFields();
+  const create = useCreateFunctionalField();
+  const update = useUpdateFunctionalField();
+  const remove = useDeleteFunctionalField();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -26,32 +24,32 @@ export default function Details() {
   const openCreate = () => { setForm(empty); setModalOpen(true); };
 
   const handleCreate = () => {
-    if (!form.name.trim() || !form.functionalFieldId) return;
-    const dto: DetailPostDTO = { ...form };
+    if (!form.name.trim()) return;
+    const dto: FunctionalFieldPostDTO = { ...form };
     create.mutate(dto, { onSuccess: () => setModalOpen(false) });
   };
 
-  const handleInlineEdit = (row: DetailGetDTO, changes: Record<string, unknown>) => {
-    const dto: DetailPutDTO = {
+  const handleInlineEdit = (row: FunctionalFieldGetDTO, changes: Record<string, unknown>) => {
+    const dto: FunctionalFieldPutDTO = {
       id: row.id,
       name: (changes.name as string) ?? row.name,
       code: (changes.code as string) ?? row.code,
-      functionalFieldId: row.functionalFieldGetDTO?.id ?? 0,
+      serialNumber: (changes.serialNumber as number) ?? row.serialNumber,
     };
     update.mutate({ id: row.id, dto });
   };
 
-  const columns: Column<DetailGetDTO>[] = [
+  const columns: Column<FunctionalFieldGetDTO>[] = [
     { key: "id", header: "ID", className: "w-16" },
     { key: "name", header: "Ad", editable: isAdmin() },
     { key: "code", header: "Kod", editable: isAdmin() },
-    { key: "functionalFieldGetDTO", header: "Funksional Sahə", render: (r) => r.functionalFieldGetDTO?.name ?? "—" },
+    { key: "serialNumber", header: "Sıra nömrəsi", editable: isAdmin(), editType: "number" },
   ];
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Detallar</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Funksional Sahələr</h1>
         {isAdmin() && (
           <button onClick={openCreate} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"><Plus size={16} /> Yeni</button>
         )}
@@ -67,11 +65,11 @@ export default function Details() {
         ) : undefined}
       />
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Yeni detal">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Yeni sahə">
         <div className="space-y-4">
           <Field label="Ad" value={form.name} onChange={(e) => setForm({ ...form, name: (e.target as HTMLInputElement).value })} />
           <Field label="Kod" value={form.code} onChange={(e) => setForm({ ...form, code: (e.target as HTMLInputElement).value })} />
-          <Select label="Funksional Sahə" placeholder="Seçin..." value={form.functionalFieldId} onChange={(e) => setForm({ ...form, functionalFieldId: Number(e.target.value) })} options={fields.map((f) => ({ value: f.id, label: f.name }))} />
+          <Field label="Sıra nömrəsi" type="number" value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: Number((e.target as HTMLInputElement).value) })} />
           <div className="flex justify-end gap-3">
             <button onClick={() => setModalOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Ləğv et</button>
             <button onClick={handleCreate} disabled={create.isPending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Yarat</button>

@@ -1,28 +1,24 @@
 import { clsx } from "clsx";
 
+type Variant = "default" | "danger" | "warning" | "success" | "info";
+
+const styles: Record<Variant, string> = {
+  default: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+  danger: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  warning: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  success: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  info: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+};
+
 interface BadgeProps {
+  variant?: Variant;
   children: React.ReactNode;
-  variant?: "default" | "success" | "warning" | "danger" | "info";
   className?: string;
 }
 
-const variants: Record<string, string> = {
-  default: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
-  success: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200",
-  warning: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200",
-  danger: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200",
-  info: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200",
-};
-
-export default function Badge({ children, variant = "default", className }: BadgeProps) {
+export default function Badge({ variant = "default", children, className }: BadgeProps) {
   return (
-    <span
-      className={clsx(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
-        variants[variant],
-        className
-      )}
-    >
+    <span className={clsx("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", styles[variant], className)}>
       {children}
     </span>
   );

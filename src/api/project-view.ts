@@ -43,7 +43,7 @@ export const projectDetailsApi = {
       .then((r) => r.data.getDTOs ?? r.data),
 
   create: (dto: ProjectDetailPostDTO) =>
-    client.post("projectdetails", dto).then((r) => r.data),
+    client.post("projectdetails", { dto }).then((r) => r.data),
 
   update: (id: number, dto: ProjectDetailPutDTO) =>
     client.put(`projectdetails/${id}`, dto).then((r) => r.data),

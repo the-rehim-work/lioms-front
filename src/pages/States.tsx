@@ -1,0 +1,87 @@
+import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+import DataTable, { type Column } from "@/components/DataTable";
+import Modal from "@/components/Modal";
+import Field from "@/components/Field";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import Badge from "@/components/Badge";
+import { useStates, useCreateState, useUpdateState, useDeleteState } from "@/hooks/use-lookups";
+import { useAuthStore } from "@/stores/auth";
+import type { StateGetDTO, StatePostDTO, StatePutDTO } from "@/types";
+
+const empty = { name: "", sequence: 0, isInitial: false };
+
+export default function States() {
+  const { isAdmin } = useAuthStore();
+  const { data = [], isLoading } = useStates();
+  const create = useCreateState();
+  const update = useUpdateState();
+  const remove = useDeleteState();
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [form, setForm] = useState(empty);
+
+  const openCreate = () => { setForm(empty); setModalOpen(true); };
+
+  const handleCreate = () => {
+    if (!form.name.trim()) return;
+    const dto: StatePostDTO = { ...form };
+    create.mutate(dto, { onSuccess: () => setModalOpen(false) });
+  };
+
+  const handleInlineEdit = (row: StateGetDTO, changes: Record<string, unknown>) => {
+    const dto: StatePutDTO = {
+      id: row.id,
+      name: (changes.name as string) ?? row.name,
+      sequence: (changes.sequence as number) ?? row.sequence,
+      isInitial: row.isInitial,
+    };
+    update.mutate({ id: row.id, dto });
+  };
+
+  const columns: Column<StateGetDTO>[] = [
+    { key: "id", header: "ID", className: "w-16" },
+    { key: "name", header: "Ad", editable: isAdmin() },
+    { key: "sequence", header: "Ardıcıllıq", editable: isAdmin(), editType: "number" },
+    { key: "isInitial", header: "İlkin", render: (r) => <Badge variant={r.isInitial ? "success" : "default"}>{r.isInitial ? "Bəli" : "Xeyr"}</Badge> },
+  ];
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Vəziyyətlər</h1>
+        {isAdmin() && (
+          <button onClick={openCreate} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"><Plus size={16} /> Yeni</button>
+        )}
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={data}
+        loading={isLoading}
+        onInlineEdit={isAdmin() ? handleInlineEdit : undefined}
+        actions={isAdmin() ? (row) => (
+          <button onClick={(e) => { e.stopPropagation(); setDeleteId(row.id); }} className="rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"><Trash2 size={15} /></button>
+        ) : undefined}
+      />
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Yeni vəziyyət">
+        <div className="space-y-4">
+          <Field label="Ad" value={form.name} onChange={(e) => setForm({ ...form, name: (e.target as HTMLInputElement).value })} />
+          <Field label="Ardıcıllıq" type="number" value={form.sequence} onChange={(e) => setForm({ ...form, sequence: Number((e.target as HTMLInputElement).value) })} />
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input type="checkbox" checked={form.isInitial} onChange={(e) => setForm({ ...form, isInitial: e.target.checked })} className="rounded border-gray-300" />
+            İlkin vəziyyət
+          </label>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setModalOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Ləğv et</button>
+            <button onClick={handleCreate} disabled={create.isPending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Yarat</button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) remove.mutate(deleteId, { onSuccess: () => setDeleteId(null) }); }} loading={remove.isPending} />
+    </div>
+  );
+}

@@ -14,12 +14,11 @@ export default function Modal({ open, onClose, title, children, wide }: ModalPro
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
+    const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+    if (open) document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
   }, [open, onClose]);
 
   if (!open) return null;
@@ -30,17 +29,15 @@ export default function Modal({ open, onClose, title, children, wide }: ModalPro
       <div
         ref={ref}
         className={clsx(
-          "relative z-10 w-full rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800",
-          wide ? "max-w-2xl" : "max-w-md"
+          "relative z-10 max-h-[85vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800",
+          wide ? "w-full max-w-2xl" : "w-full max-w-md"
         )}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {title}
-          </h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             <X size={18} />
           </button>

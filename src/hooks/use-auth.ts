@@ -21,7 +21,7 @@ export function useMe() {
 }
 
 export function useLogin() {
-  const { setTokens } = useAuthStore();
+  const { setTokens, setUser } = useAuthStore();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -30,7 +30,7 @@ export function useLogin() {
     onSuccess: async (data) => {
       setTokens(data.accessToken, data.refreshToken);
       const user = await authApi.me();
-      useAuthStore.getState().setUser(user);
+      setUser(user);
       qc.setQueryData(["me"], user);
       navigate("/");
     },

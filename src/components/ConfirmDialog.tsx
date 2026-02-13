@@ -4,22 +4,22 @@ interface ConfirmDialogProps {
   open: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  loading?: boolean;
   title?: string;
   message?: string;
-  loading?: boolean;
 }
 
 export default function ConfirmDialog({
   open,
   onClose,
   onConfirm,
-  title = "Silmə təsdiqi",
-  message = "Bu əməliyyatı geri qaytarmaq mümkün olmayacaq. Əminsiniz?",
   loading,
+  title = "Silmə təsdiqi",
+  message = "Bu əməliyyatı geri qaytarmaq mümkün olmayacaq. Davam etmək istəyirsiniz?",
 }: ConfirmDialogProps) {
   return (
     <Modal open={open} onClose={onClose} title={title}>
-      <p className="mb-6 text-sm text-gray-600 dark:text-gray-300">{message}</p>
+      <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">{message}</p>
       <div className="flex justify-end gap-3">
         <button
           onClick={onClose}
