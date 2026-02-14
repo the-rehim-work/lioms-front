@@ -49,6 +49,7 @@ export const ProjectCompanyCategoryLabel: Record<ProjectCompanyCategory, string>
 };
 
 export interface CompanyGetDTO {
+  [x: string]: number;
   id: number;
   name: string;
   alias: string;

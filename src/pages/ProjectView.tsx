@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Building2, Puzzle, FileText, Layers,
   Plus, Trash2, Download, Edit, ChevronDown, ChevronRight,
-  Upload, X, FileIcon,
+  Upload, X, FileIcon, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProject, useUpdateProject } from "@/hooks/use-projects";
@@ -27,6 +27,7 @@ import Select from "@/components/Select";
 import type {
   ProjectCompanyPostDTO, ProjectDetailPostDTO, ProjectDetailPutDTO,
   ProjectStatePostDTO, ProjectStateDegradeDTO, ProjectDetailGetDTO,
+  ProjectPutDTO,
 } from "@/types";
 import {
   Priority, PriorityLabel,
@@ -58,10 +59,48 @@ export default function ProjectView() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
   const navigate = useNavigate();
-  const { isAdmin, canWrite } = useAuthStore();
+  const { isAdmin } = useAuthStore();
   const [tab, setTab] = useState<Tab>("details");
+  const [showEdit, setShowEdit] = useState(false);
 
   const { data: project, isLoading } = useProject(projectId);
+  const { data: companies } = useCompanies();
+  const { data: plans } = usePlans();
+  const { data: enums } = useEnums();
+  const updateProject = useUpdateProject();
+
+  const [editForm, setEditForm] = useState({
+    name: "",
+    planId: 0,
+    coordinatorCompanyId: 0,
+    priority: Priority.A_1 as Priority,
+    thirdSurveyScore: 0,
+    isJoint: false,
+    note: "",
+  });
+
+  const openEdit = () => {
+    if (!project) return;
+    setEditForm({
+      name: project.name,
+      planId: project.planGetDTO?.id ?? 0,
+      coordinatorCompanyId: project.coordinatorCompanyGetDTO?.id ?? 0,
+      priority: project.priority,
+      thirdSurveyScore: project.thirdSurveyScore,
+      isJoint: project.isJoint,
+      note: project.note ?? "",
+    });
+    setShowEdit(true);
+  };
+
+  const handleUpdate = () => {
+    if (!editForm.name.trim() || !editForm.planId || !editForm.coordinatorCompanyId) {
+      toast.error("Ad, plan və koordinator qurum tələb olunur");
+      return;
+    }
+    const dto: ProjectPutDTO = { id: projectId, ...editForm };
+    updateProject.mutate({ id: projectId, dto }, { onSuccess: () => setShowEdit(false) });
+  };
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner className="h-8 w-8" /></div>;
   if (!project) return <p className="p-6 text-gray-500">Layihə tapılmadı</p>;
@@ -100,6 +139,14 @@ export default function ProjectView() {
             </div>
             {project.note && <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{project.note}</p>}
           </div>
+          {isAdmin() && (
+            <button
+              onClick={openEdit}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <Pencil size={14} /> Redaktə et
+            </button>
+          )}
         </div>
       </div>
 
@@ -123,6 +170,29 @@ export default function ProjectView() {
       {tab === "details" && <DetailsTab projectId={projectId} />}
       {tab === "files" && <FilesTab projectId={projectId} />}
       {tab === "states" && <StatesTab projectId={projectId} />}
+
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Layihəni redaktə et" wide>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Ad" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: (e.target as HTMLInputElement).value })} className="col-span-2" />
+          <Select label="Plan" value={editForm.planId} onChange={(e) => setEditForm({ ...editForm, planId: Number(e.target.value) })} options={(plans ?? []).map((p) => ({ value: p.id, label: p.name }))} placeholder="Plan seçin" />
+          <Select label="Koordinator qurum" value={editForm.coordinatorCompanyId} onChange={(e) => setEditForm({ ...editForm, coordinatorCompanyId: Number(e.target.value) })} options={(companies ?? []).map((c) => ({ value: c.id, label: c.name }))} placeholder="Qurum seçin" />
+          <Select label="Prioritet" value={editForm.priority} onChange={(e) => setEditForm({ ...editForm, priority: Number(e.target.value) as Priority })} options={(enums?.priorities ?? []).map((p) => ({ value: p.id, label: p.name.replace("_", "-") }))} />
+          <Field label="3-cü Sorğu Balı" type="number" step="0.01" value={editForm.thirdSurveyScore} onChange={(e) => setEditForm({ ...editForm, thirdSurveyScore: Number((e.target as HTMLInputElement).value) })} />
+          <div className="flex items-end gap-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              <input type="checkbox" checked={editForm.isJoint} onChange={(e) => setEditForm({ ...editForm, isJoint: (e.target as HTMLInputElement).checked })} className="h-4 w-4 rounded border-gray-300" />
+              Birgə layihə
+            </label>
+          </div>
+          <Field label="Qeyd" as="textarea" value={editForm.note} onChange={(e) => setEditForm({ ...editForm, note: (e.target as HTMLTextAreaElement).value })} className="col-span-2" />
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button onClick={() => setShowEdit(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Ləğv et</button>
+          <button onClick={handleUpdate} disabled={updateProject.isPending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+            {updateProject.isPending ? "Yenilənir..." : "Yadda saxla"}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -203,7 +273,6 @@ function DetailsTab({ projectId }: { projectId: number }) {
   const { isAdmin } = useAuthStore();
   const { data, isLoading } = useProjectDetails(projectId);
   const { data: details } = useDetails();
-  const { data: enums } = useEnums();
   const create = useCreateProjectDetail(projectId);
   const update = useUpdateProjectDetail(projectId);
   const remove = useDeleteProjectDetail(projectId);

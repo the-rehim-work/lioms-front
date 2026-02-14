@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { authApi } from "@/api/auth";
 import { useAuthStore } from "@/stores/auth";
-import type { LoginDTO } from "@/types";
+import type { LoginDTO, TokenResponseDTO } from "@/types";
 
 export function useMe() {
   const { isAuthenticated, setUser } = useAuthStore();
@@ -25,8 +25,8 @@ export function useLogin() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  return useMutation({
-    mutationFn: (dto: LoginDTO) => authApi.login(dto),
+  return useMutation<TokenResponseDTO, Error, LoginDTO>({
+    mutationFn: (dto) => authApi.login(dto),
     onSuccess: async (data) => {
       setTokens(data.accessToken, data.refreshToken);
       const user = await authApi.me();
@@ -34,9 +34,9 @@ export function useLogin() {
       qc.setQueryData(["me"], user);
       navigate("/");
     },
-    onError: (err: unknown) => {
+    onError: (err) => {
       const msg =
-        (err as { response?: { data?: string } })?.response?.data ??
+        (err as unknown as { response?: { data?: string } })?.response?.data ??
         "Giriş uğursuz oldu";
       toast.error(String(msg));
     },
@@ -48,8 +48,8 @@ export function useLogout() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  return useMutation({
-    mutationFn: () => authApi.logout(),
+  return useMutation<void, Error, void>({
+    mutationFn: () => authApi.logout().then(() => {}),
     onSettled: () => {
       logout();
       qc.clear();

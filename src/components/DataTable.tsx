@@ -13,6 +13,7 @@ export interface Column<T> {
   editType?: "text" | "number" | "select";
   editOptions?: { value: string | number; label: string }[];
   editRender?: (value: unknown, onChange: (val: unknown) => void) => React.ReactNode;
+  searchValue?: (row: T) => string;
 }
 
 interface DataTableProps<T> {
@@ -59,6 +60,7 @@ export default function DataTable<T>({
     return data.filter((row) => {
       const r = rec(row);
       return columns.some((col) => {
+        if (col.searchValue) return col.searchValue(row).toLowerCase().includes(term);
         if (col.render) return false;
         const val = r[col.key];
         return val != null && String(val).toLowerCase().includes(term);
@@ -69,14 +71,15 @@ export default function DataTable<T>({
   const sorted = useMemo(() => {
     if (!sortKey || !sortDir) return filtered;
     return [...filtered].sort((a, b) => {
-      const aVal = rec(a)[sortKey];
-      const bVal = rec(b)[sortKey];
+      const col = columns.find((c) => c.key === sortKey);
+      const aVal = col?.searchValue ? col.searchValue(a) : rec(a)[sortKey];
+      const bVal = col?.searchValue ? col.searchValue(b) : rec(b)[sortKey];
       if (aVal == null) return 1;
       if (bVal == null) return -1;
       const cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true });
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [filtered, sortKey, sortDir, rec]);
+  }, [filtered, sortKey, sortDir, rec, columns]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paged = sorted.slice(page * pageSize, (page + 1) * pageSize);
