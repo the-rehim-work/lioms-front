@@ -87,7 +87,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             className="flex flex-col items-center px-5 py-5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
           >
             <img
-              src="/assets/Azerbaijan_MOD_badge.svg"
+              src="/Azerbaijan_MOD_badge.svg"
               alt="MN"
               className="h-20 w-20 object-contain"
             />
