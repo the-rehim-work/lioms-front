@@ -1,10 +1,13 @@
 import axios from "axios";
 import { useAuthStore } from "@/stores/auth";
+import { R } from "./routes";
+
+const baseURL = import.meta.env.DEV
+  ? import.meta.env.VITE_DEV_API_URL
+  : import.meta.env.VITE_PROD_API_URL;
 
 const client = axios.create({
-  baseURL: import.meta.env.DEV
-    ? import.meta.env.VITE_DEV_API_URL
-    : import.meta.env.VITE_PROD_API_URL,
+  baseURL,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -38,7 +41,7 @@ client.interceptors.response.use(
     if (!refreshPromise) {
       refreshPromise = axios
         .post<{ accessToken: string; refreshToken: string; expireDate: string }>(
-          `${import.meta.env.REACT_APP_DEV_API_URL}accounts/Refresh`,
+          `${baseURL}/${R.auth.refresh}`,
           { accessToken, refreshToken }
         )
         .then((res) => {
@@ -63,4 +66,5 @@ client.interceptors.response.use(
   }
 );
 
+export { baseURL };
 export default client;

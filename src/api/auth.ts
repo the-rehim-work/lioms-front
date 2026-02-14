@@ -1,4 +1,5 @@
 import client from "./client";
+import { R } from "./routes";
 import type {
   LoginDTO,
   TokenResponseDTO,
@@ -8,12 +9,12 @@ import type {
 
 export const authApi = {
   login: (dto: LoginDTO) =>
-    client.post<TokenResponseDTO>("accounts/Login", dto).then((r) => r.data),
+    client.post<TokenResponseDTO>(R.auth.login, dto).then((r) => r.data),
 
   refresh: (dto: RefreshTokenDTO) =>
-    client.post<TokenResponseDTO>("accounts/Refresh", dto).then((r) => r.data),
+    client.post<TokenResponseDTO>(R.auth.refresh, dto).then((r) => r.data),
 
-  me: () => client.get<UserGetDTO>("accounts/me").then((r) => r.data),
+  me: () => client.get<UserGetDTO>(R.auth.me).then((r) => r.data),
 
-  logout: () => client.post("accounts/Logout"),
+  logout: () => client.post(R.auth.logout),
 };
