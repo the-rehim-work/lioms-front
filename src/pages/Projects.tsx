@@ -81,17 +81,17 @@ export default function Projects() {
   const hasActiveFilter = activeFilter !== null;
   const filterCount = hasActiveFilter
     ? [
-        activeFilter.planIds?.length,
-        activeFilter.coordinatorCompanyIds?.length,
-        activeFilter.priorities?.length,
-        activeFilter.stateIds?.length,
-        activeFilter.isJoint !== null ? 1 : 0,
-        activeFilter.thirdSurveyScoreMin !== null ? 1 : 0,
-        activeFilter.thirdSurveyScoreMax !== null ? 1 : 0,
-        activeFilter.createdFrom ? 1 : 0,
-        activeFilter.createdTo ? 1 : 0,
-        activeFilter.searchTerm ? 1 : 0,
-      ].reduce((s, v) => s + (v || 0), 0)
+      activeFilter.planIds?.length,
+      activeFilter.coordinatorCompanyIds?.length,
+      activeFilter.priorities?.length,
+      activeFilter.stateIds?.length,
+      activeFilter.isJoint !== null ? 1 : 0,
+      activeFilter.thirdSurveyScoreMin !== null ? 1 : 0,
+      activeFilter.thirdSurveyScoreMax !== null ? 1 : 0,
+      activeFilter.createdFrom ? 1 : 0,
+      activeFilter.createdTo ? 1 : 0,
+      activeFilter.searchTerm ? 1 : 0,
+    ].reduce((s, v) => s + (v || 0), 0)
     : 0;
 
   const columns: Column<ProjectSummaryGetDTO>[] = [
@@ -108,7 +108,7 @@ export default function Projects() {
       searchValue: (r) => `${r.coordinatorCompanyGetDTO?.name ?? ""} ${r.coordinatorCompanyGetDTO?.alias ?? ""}`,
     },
     {
-      key: "priority", header: "Prioritet", sortable: true,
+      key: "priority", header: "Prioritet sırası", sortable: true,
       render: (r) => (
         <Badge variant={r.priority <= 3 ? "danger" : r.priority <= 6 ? "warning" : "default"}>
           {PriorityLabel[r.priority as Priority] ?? r.priority}
@@ -117,7 +117,7 @@ export default function Projects() {
       searchValue: (r) => PriorityLabel[r.priority as Priority] ?? String(r.priority),
     },
     {
-      key: "state", header: "Vəziyyət",
+      key: "state", header: "Statusu",
       render: (r) =>
         r.currentStateGetDTO ? (
           <Badge variant={stateColor(r.currentStateGetDTO.name, r.currentStateGetDTO.sequence)}>
@@ -126,11 +126,11 @@ export default function Projects() {
         ) : "—",
       searchValue: (r) => r.currentStateGetDTO?.name ?? "",
     },
-    { key: "thirdSurveyScore", header: "3-cü Sorğu", sortable: true },
+    { key: "thirdSurveyScore", header: "3-cü Sorğu balı", sortable: true },
     {
-      key: "isJoint", header: "Birgə",
-      render: (r) => r.isJoint ? <Badge variant="success">Bəli</Badge> : "Xeyr",
-      searchValue: (r) => r.isJoint ? "Bəli" : "Xeyr",
+      key: "isJoint", header: "Müstəqil / Müştərək", sortable: true,
+      render: (r) => r.isJoint ? <Badge variant="default">Müstəqil</Badge> : <Badge variant="success">Müştərək</Badge>,
+      searchValue: (r) => r.isJoint ? "Müştərək" : "Müstəqil",
     },
     { key: "projectDetailCount", header: "Detallar", sortable: true },
     { key: "projectFileCount", header: "Fayllar", sortable: true },
@@ -184,11 +184,10 @@ export default function Projects() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowFilter(true)}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-              hasActiveFilter
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${hasActiveFilter
                 ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
                 : "border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-            }`}
+              }`}
           >
             <Filter size={16} />
             Filtr
@@ -310,11 +309,10 @@ export default function Projects() {
                       key={p.id}
                       type="button"
                       onClick={() => setFilter({ ...filter, priorities: toggleMultiSelect(filter.priorities as number[] | null, p.id) as Priority[] })}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                        selected
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${selected
                           ? "bg-blue-600 text-white"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                      }`}
+                        }`}
                     >
                       {p.name.replace("_", "-")}
                     </button>

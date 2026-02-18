@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+/* eslint-disable react-hooks/preserve-manual-memoization */
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Building2, Puzzle, FileText, Layers,
@@ -155,11 +156,10 @@ export default function ProjectView() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              tab === t.key
-                ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
-                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
+            className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${tab === t.key
+              ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
+              : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              }`}
           >
             <t.icon size={16} /> {t.label}
           </button>
@@ -281,6 +281,7 @@ function DetailsTab({ projectId }: { projectId: number }) {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [form, setForm] = useState({ detailId: 0, approximatePrice: 0, totalCount: 0, detailCountType: DetailCountType.None });
+  const { data: project } = useProject(projectId);
 
   const handleAdd = () => {
     if (!form.detailId) { toast.error("Detal seçin"); return; }
@@ -331,7 +332,17 @@ function DetailsTab({ projectId }: { projectId: number }) {
                 )}
               </div>
             </div>
-            {expandedId === pd.id && <DetailExpanded projectDetailId={pd.id} projectId={projectId} />}
+            {expandedId === pd.id && (
+              <DetailExpanded
+                projectDetailId={pd.id}
+                projectId={projectId}
+                planStartYear={project?.planGetDTO?.startYear ?? new Date().getFullYear()}
+                planEndYear={project?.planGetDTO?.endYear ?? new Date().getFullYear() + 4}
+                totalCount={pd.totalCount}
+                approximatePrice={pd.approximatePrice}
+                detailCountTypeLabel={DetailCountTypeLabel[pd.detailCountType]}
+              />
+            )}
           </div>
         ))}
         {(data ?? []).length === 0 && <p className="py-8 text-center text-sm text-gray-400">Detal tapılmadı</p>}
@@ -357,7 +368,23 @@ function DetailsTab({ projectId }: { projectId: number }) {
   );
 }
 
-function DetailExpanded({ projectDetailId, projectId }: { projectDetailId: number; projectId: number }) {
+function DetailExpanded({
+  projectDetailId,
+  projectId,
+  planStartYear,
+  planEndYear,
+  totalCount,
+  approximatePrice,
+  detailCountTypeLabel,
+}: {
+  projectDetailId: number;
+  projectId: number;
+  planStartYear: number;
+  planEndYear: number;
+  totalCount: number;
+  approximatePrice: number;
+  detailCountTypeLabel: string;
+}) {
   const { isAdmin } = useAuthStore();
   const { data: pdcList, isLoading } = usePDC(projectDetailId);
   const { data: companies } = useCompanies();
@@ -368,52 +395,296 @@ function DetailExpanded({ projectDetailId, projectId }: { projectDetailId: numbe
   const removeYear = useDeletePDCYear(projectDetailId);
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [addCompanyId, setAddCompanyId] = useState(0);
-  const [showAddYear, setShowAddYear] = useState<number | null>(null);
-  const [yearForm, setYearForm] = useState({ year: new Date().getFullYear(), count: 0 });
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Map<string, number>>(new Map());
+  const currentYear = new Date().getFullYear();
+
+  const allYears = useMemo(() => {
+    const yrs: number[] = [];
+    for (let y = planStartYear; y <= planEndYear; y++) yrs.push(y);
+    return yrs;
+  }, [planStartYear, planEndYear]);
+
+  const yearMap = useMemo(() => {
+    const map = new Map<string, { id: number; count: number }>();
+    (years ?? []).forEach((y) => {
+      const pdcId = y.projectDetailCompanyGetDTO?.id;
+      if (pdcId != null) map.set(`${pdcId}-${y.year}`, { id: y.id, count: y.count });
+    });
+    return map;
+  }, [years]);
+
+  const getCell = (pdcId: number, year: number) => yearMap.get(`${pdcId}-${year}`) ?? null;
+
+  const getCellValue = (pdcId: number, year: number) => {
+    const key = `${pdcId}-${year}`;
+    if (editing && draft.has(key)) return draft.get(key)!;
+    return getCell(pdcId, year)?.count ?? 0;
+  };
+
+  const setDraftValue = (pdcId: number, year: number, value: number) => {
+    setDraft((prev) => {
+      const next = new Map(prev);
+      next.set(`${pdcId}-${year}`, value);
+      return next;
+    });
+  };
+
+  const startEditing = () => {
+    setDraft(new Map());
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setDraft(new Map());
+    setEditing(false);
+  };
+
+  const saveEdits = async () => {
+    const projectedTotals = new Map<number, number>();
+    for (const pdc of pdcList ?? []) {
+      const sum = allYears.reduce((s, y) => s + getCellValue(pdc.id, y), 0);
+      projectedTotals.set(pdc.id, sum);
+    }
+    const grandTotal = [...projectedTotals.values()].reduce((s, v) => s + v, 0);
+    if (grandTotal > totalCount) {
+      toast.error(`Ümumi say limiti aşılır: ${fmt(grandTotal)} / ${fmt(totalCount)}`);
+      return;
+    }
+
+    for (const [key, newCount] of draft.entries()) {
+      const [pdcIdStr, yearStr] = key.split("-");
+      const pdcId = Number(pdcIdStr);
+      const year = Number(yearStr);
+      const existing = getCell(pdcId, year);
+
+      if (existing && newCount === existing.count) continue;
+
+      if (existing && newCount === 0) {
+        await new Promise<void>((res) => removeYear.mutate(existing.id, { onSuccess: () => res(), onError: () => res() }));
+      } else if (existing && newCount > 0) {
+        await new Promise<void>((res) =>
+          removeYear.mutate(existing.id, {
+            onSuccess: () => {
+              createYear.mutate({ year, count: newCount, projectDetailCompanyId: pdcId }, { onSuccess: () => res(), onError: () => res() });
+            },
+            onError: () => res(),
+          })
+        );
+      } else if (!existing && newCount > 0) {
+        await new Promise<void>((res) =>
+          createYear.mutate({ year, count: newCount, projectDetailCompanyId: pdcId }, { onSuccess: () => res(), onError: () => res() })
+        );
+      }
+    }
+    setDraft(new Map());
+    setEditing(false);
+  };
+
+  const firstYearWarnings = useMemo(() => {
+    const warnings = new Map<number, boolean>();
+    (pdcList ?? []).forEach((pdc) => {
+      const pdcYears = allYears.map((y) => getCellValue(pdc.id, y));
+      const total = pdc.projectDetailGetDTO?.totalCount ?? 0;
+      if (total > 0 && pdcYears.length > 0 && pdcYears[0] >= total * 0.7) {
+        warnings.set(pdc.id, true);
+      }
+    });
+    return warnings;
+  }, [pdcList, allYears, yearMap, draft, editing]);
+
+  const first3 = allYears.slice(0, 3);
+  const fourth = allYears[3] ?? null;
+  const rest = allYears.slice(4);
+
+  type ColDef =
+    | { type: "year"; year: number }
+    | { type: "sum"; label: string; getSum: (pdcId: number) => number };
+
+  const columns = useMemo((): ColDef[] => {
+    const cols: ColDef[] = [];
+    first3.forEach((y) => cols.push({ type: "year", year: y }));
+    if (first3.length > 0) {
+      cols.push({
+        type: "sum",
+        label: `${first3.length}il`,
+        getSum: (pdcId) => first3.reduce((s, y) => s + getCellValue(pdcId, y), 0),
+      });
+    }
+    if (fourth !== null) {
+      cols.push({ type: "year", year: fourth });
+      cols.push({
+        type: "sum",
+        label: "4il",
+        getSum: (pdcId) => [...first3, fourth].reduce((s, y) => s + getCellValue(pdcId, y), 0),
+      });
+    }
+    rest.forEach((y) => cols.push({ type: "year", year: y }));
+    cols.push({
+      type: "sum",
+      label: "Yekun",
+      getSum: (pdcId) => allYears.reduce((s, y) => s + getCellValue(pdcId, y), 0),
+    });
+    return cols;
+  }, [allYears, yearMap, draft, editing]);
+
+  const fmt = (n: number) => Math.round(n).toLocaleString("az-AZ");
+  const fmtMoney = (n: number) => Math.round(n).toLocaleString("az-AZ");
 
   if (isLoading) return <div className="px-4 pb-3"><Spinner className="h-4 w-4" /></div>;
 
   return (
     <div className="border-t border-gray-200 px-4 pb-4 pt-3 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="text-xs font-semibold uppercase text-gray-400">Şirkətlər və İllik Planlar</h4>
-        {isAdmin() && (
-          <button onClick={() => setShowAddCompany(true)} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700">
-            <Plus size={12} /> Şirkət
-          </button>
-        )}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <h4 className="text-xs font-semibold uppercase text-gray-400">Şirkətlər və İllik Planlar</h4>
+          <Badge variant="info">{detailCountTypeLabel}</Badge>
+          <span className="text-xs text-gray-500">Ümumi: <strong className="text-gray-900 dark:text-white">{fmt(totalCount)}</strong> {detailCountTypeLabel}</span>
+          <span className="text-xs text-gray-500">Qiymət: <strong className="text-gray-900 dark:text-white">{fmtMoney(approximatePrice)}</strong></span>
+        </div>
+        <div className="flex items-center gap-2">
+          {isAdmin() && !editing && (
+            <>
+              <button onClick={startEditing} className="flex items-center gap-1 rounded-md border border-blue-300 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20">
+                <Pencil size={12} /> Redaktə
+              </button>
+              <button onClick={() => setShowAddCompany(true)} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700">
+                <Plus size={12} /> Şirkət
+              </button>
+            </>
+          )}
+          {editing && (
+            <>
+              <button onClick={cancelEditing} className="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400">
+                Ləğv et
+              </button>
+              <button onClick={saveEdits} className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700">
+                Yadda saxla
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {(pdcList ?? []).length === 0 && <p className="text-xs text-gray-400">Şirkət təyin edilməyib</p>}
+      {(pdcList ?? []).length === 0 ? (
+        <p className="text-xs text-gray-400">Şirkət təyin edilməyib</p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-gray-50 text-[10px] uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+              <tr>
+                <th className="px-3 py-2 sticky left-0 bg-gray-50 dark:bg-gray-800 z-10">Şirkət</th>
+                <th className="px-2 py-2 text-center">Ümumi</th>
+                {columns.map((col, i) => {
+                  if (col.type === "year") {
+                    const isCurrent = col.year === currentYear;
+                    return (
+                      <th key={i} className={`px-2 py-2 text-center ${isCurrent ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-bold" : ""}`}>
+                        {col.year}
+                      </th>
+                    );
+                  }
+                  return (
+                    <th key={i} className="px-2 py-2 text-center bg-gray-100 dark:bg-gray-750 font-bold border-l border-gray-200 dark:border-gray-600">
+                      {col.label}
+                    </th>
+                  );
+                })}
+                {isAdmin() && editing && <th className="px-2 py-2 w-10" />}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {(pdcList ?? []).map((pdc) => {
+                const hasWarning = firstYearWarnings.get(pdc.id);
+                const rowSum = allYears.reduce((s, y) => s + getCellValue(pdc.id, y), 0);
 
-      {(pdcList ?? []).map((pdc) => {
-        const pdcYears = (years ?? []).filter((y) => y.projectDetailCompanyGetDTO?.id === pdc.id);
-        return (
-          <div key={pdc.id} className="mb-2 rounded border border-gray-100 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-900/40">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{pdc.companyGetDTO?.name ?? "—"}</span>
-              <div className="flex items-center gap-2">
-                {isAdmin() && (
-                  <>
-                    <button onClick={() => { setShowAddYear(pdc.id); setYearForm({ year: new Date().getFullYear(), count: 0 }); }} className="text-xs text-blue-600 hover:text-blue-700">+ İl</button>
-                    <button onClick={() => removePDC.mutate(pdc.id)} className="text-xs text-red-500 hover:text-red-700">Sil</button>
-                  </>
-                )}
-              </div>
-            </div>
-            {pdcYears.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {pdcYears.map((y) => (
-                  <span key={y.id} className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                    {y.year}: {y.count}
-                    {isAdmin() && <button onClick={() => removeYear.mutate(y.id)} className="ml-1 text-red-400 hover:text-red-600">&times;</button>}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+                return (
+                  <tr key={pdc.id} className="bg-white dark:bg-gray-800">
+                    <td className="px-3 py-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800 z-10">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        {pdc.companyGetDTO?.name ?? "—"}
+                        {hasWarning && (
+                          <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" title="İlk ilin sayı ümuminin 70%-dən çoxdur">
+                            ⚠ İlk il ≥70%
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 text-center font-semibold text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-600" title={`Ümumi: ${fmt(totalCount)} × ${fmtMoney(approximatePrice)} = ${fmtMoney(totalCount * approximatePrice)}`}>
+                      {fmt(totalCount)}
+                    </td>
+                    {columns.map((col, ci) => {
+                      if (col.type === "sum") {
+                        const sumVal = col.getSum(pdc.id);
+                        return (
+                          <td key={ci} className="px-2 py-2 text-center font-bold text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-900/30 border-l border-gray-200 dark:border-gray-600" title={`${fmt(sumVal)} × ${fmtMoney(approximatePrice)} = ${fmtMoney(sumVal * approximatePrice)}`}>
+                            {fmt(sumVal)}
+                          </td>
+                        );
+                      }
+
+                      const y = col.year;
+                      const count = getCellValue(pdc.id, y);
+                      const isCurrent = y === currentYear;
+                      const isFirstYear = y === allYears[0];
+
+                      return (
+                        <td key={ci} className={`px-2 py-2 text-center ${isCurrent ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}>
+                          {editing ? (
+                            <input
+                              type="number"
+                              value={draft.has(`${pdc.id}-${y}`) ? draft.get(`${pdc.id}-${y}`) : count}
+                              onChange={(e) => setDraftValue(pdc.id, y, Number(e.target.value))}
+                              className={`w-16 rounded border px-1.5 py-0.5 text-center text-xs ${isCurrent ? "border-blue-400 bg-blue-50 dark:bg-blue-900/30" : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900"} dark:text-white`}
+                            />
+                          ) : (
+                            <span
+                              className={`inline-block min-w-[2rem] rounded px-1.5 py-0.5 ${count === 0 ? "text-gray-300 dark:text-gray-600" : ""
+                                } ${isCurrent && count > 0 ? "font-bold text-blue-700 dark:text-blue-300" : count > 0 ? "text-gray-900 dark:text-white font-medium" : ""
+                                } ${isFirstYear && hasWarning ? "text-amber-600 dark:text-amber-400 font-bold" : ""}`}
+                              title={count > 0 ? `${fmt(count)} × ${fmtMoney(approximatePrice)} = ${fmtMoney(count * approximatePrice)}` : undefined}
+                            >
+                              {fmt(count)}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    {isAdmin() && editing && (
+                      <td className="px-2 py-2 text-center">
+                        <button onClick={() => removePDC.mutate(pdc.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+              <tr className="bg-gray-50 dark:bg-gray-900/40 font-bold">
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-300 sticky left-0 bg-gray-50 dark:bg-gray-900/40 z-10">Cəm</td>
+                <td className="px-2 py-2 text-center text-gray-500 border-r border-gray-200 dark:border-gray-600">{fmt(totalCount)}</td>
+                {columns.map((col, ci) => {
+                  if (col.type === "sum") {
+                    const total = (pdcList ?? []).reduce((s, pdc) => s + col.getSum(pdc.id), 0);
+                    return (
+                      <td key={ci} className="px-2 py-2 text-center text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 border-l border-gray-200 dark:border-gray-600" title={`${fmt(total)} × ${fmtMoney(approximatePrice)} = ${fmtMoney(total * approximatePrice)}`}>
+                        {fmt(total)}
+                      </td>
+                    );
+                  }
+                  const y = col.year;
+                  const colTotal = (pdcList ?? []).reduce((s, pdc) => s + getCellValue(pdc.id, y), 0);
+                  const isCurrent = y === currentYear;
+                  return (
+                    <td key={ci} className={`px-2 py-2 text-center ${isCurrent ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300" : "text-gray-700 dark:text-gray-200"}`} title={colTotal > 0 ? `${fmt(colTotal)} × ${fmtMoney(approximatePrice)} = ${fmtMoney(colTotal * approximatePrice)}` : undefined}>
+                      {fmt(colTotal)}
+                    </td>
+                  );
+                })}
+                {isAdmin() && editing && <td />}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <Modal open={showAddCompany} onClose={() => setShowAddCompany(false)} title="Detal şirkəti əlavə et">
         <Select label="Şirkət" value={addCompanyId} onChange={(e) => setAddCompanyId(Number(e.target.value))} options={(companies ?? []).map((c) => ({ value: c.id, label: c.name }))} placeholder="Seçin" />
@@ -423,18 +694,6 @@ function DetailExpanded({ projectDetailId, projectId }: { projectDetailId: numbe
             if (!addCompanyId) { toast.error("Şirkət seçin"); return; }
             createPDC.mutate({ companyId: addCompanyId, projectDetailId }, { onSuccess: () => { setShowAddCompany(false); setAddCompanyId(0); } });
           }} disabled={createPDC.isPending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Əlavə et</button>
-        </div>
-      </Modal>
-
-      <Modal open={showAddYear !== null} onClose={() => setShowAddYear(null)} title="İllik plan əlavə et">
-        <Field label="İl" type="number" value={yearForm.year} onChange={(e) => setYearForm({ ...yearForm, year: Number((e.target as HTMLInputElement).value) })} />
-        <Field label="Say" type="number" value={yearForm.count} onChange={(e) => setYearForm({ ...yearForm, count: Number((e.target as HTMLInputElement).value) })} className="mt-3" />
-        <div className="mt-4 flex justify-end gap-3">
-          <button onClick={() => setShowAddYear(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm dark:border-gray-600 dark:text-gray-300">Ləğv et</button>
-          <button onClick={() => {
-            if (!showAddYear) return;
-            createYear.mutate({ ...yearForm, projectDetailCompanyId: showAddYear }, { onSuccess: () => setShowAddYear(null) });
-          }} disabled={createYear.isPending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Əlavə et</button>
         </div>
       </Modal>
     </div>
@@ -571,11 +830,10 @@ function FilesTab({ projectId }: { projectId: number }) {
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
           onClick={() => inputRef.current?.click()}
-          className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-            dragging
-              ? "border-blue-400 bg-blue-50 dark:border-blue-600 dark:bg-blue-900/20"
-              : "border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500"
-          }`}
+          className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${dragging
+            ? "border-blue-400 bg-blue-50 dark:border-blue-600 dark:bg-blue-900/20"
+            : "border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500"
+            }`}
         >
           <Upload size={32} className="mx-auto mb-2 text-gray-400" />
           <p className="text-sm text-gray-500 dark:text-gray-400">
