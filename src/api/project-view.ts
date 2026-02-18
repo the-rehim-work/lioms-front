@@ -69,6 +69,9 @@ export const projectDetailsApi = {
       .get<Wrapped<ProjectDetailGetDTO>>(R.projectDetails.serial(sn))
       .then((r) => unwrapList(r.data)),
 
+  getByDetailCountTypeId: (detailCountTypeId: number) =>
+    client.get(R.projectDetails.byDetailCountTypeId(detailCountTypeId)).then((r) => r.data),
+
   create: (dto: ProjectDetailPostDTO) =>
     client.post(R.projectDetails.root, dto).then((r) => r.data),
 

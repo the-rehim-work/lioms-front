@@ -38,7 +38,7 @@ export const R = {
     byId: (id: number) => `details/${id}`,
     name: (name: string) => `details/name/${e(name)}`,
     code: (code: string) => `details/code/${e(code)}`,
-    byFunctionalFieldId: (id: number) => `details/functional-field/${id}`,
+    byFunctionalFieldId: (id: number) => `details/functional-field/${id}`
   },
   functionalFields: {
     root: "functionalfields",
@@ -78,6 +78,7 @@ export const R = {
     byId: (id: number) => `projectdetails/${id}`,
     byProjectId: (id: number) => `projectdetails/project/${id}`,
     byDetailId: (id: number) => `projectdetails/detail/${id}`,
+    byDetailCountTypeId: (id: number) => `projectdetails/detail-count-type/${id}`,
     serial: (sn: number) => `projectdetails/serial/${sn}`,
     totalCount: (count: number) => `projectdetails/total-count/${count}`,
   },
